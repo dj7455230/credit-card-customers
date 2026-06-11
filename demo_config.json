@@ -1,0 +1,26 @@
+{
+  "app_name": "Advanced Churn Predictor",
+  "version": "2.0.0",
+  "models_available": [
+    "random_forest",
+    "xgboost",
+    "neural_network"
+  ],
+  "features": {
+    "multi_model_prediction": true,
+    "real_time_analytics": true,
+    "ab_testing": true,
+    "explainable_ai": true,
+    "automated_reporting": true,
+    "email_alerts": true,
+    "api_endpoints": true,
+    "model_monitoring": true,
+    "deployment_ready": true
+  },
+  "demo_data": {
+    "sample_customers": 500,
+    "prediction_history": 500,
+    "models_trained": 3
+  },
+  "setup_completed": "2026-06-02T10:43:37.752980"
+}
