@@ -946,8 +946,6 @@ Upload a CSV with all **40 feature columns**. Output adds `Prediction`, `Prob_At
 
 # ── Launch ────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    import os, time
-    os.system("lsof -ti:7870 | xargs kill -9 2>/dev/null; true")
-    time.sleep(1)
-    demo.launch(server_name="127.0.0.1", server_port=7870,
+    port = int(os.environ.get("PORT", 7860))
+    demo.launch(server_name="0.0.0.0", server_port=port,
                 share=False, inbrowser=False, show_error=True)
