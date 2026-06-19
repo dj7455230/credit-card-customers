@@ -16,24 +16,14 @@ sys.path.append("utils")
 try:
     import joblib
     from sklearn.exceptions import InconsistentVersionWarning
-    from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier
-    from sklearn.neural_network import MLPClassifier
-    from sklearn.linear_model import LogisticRegression
     warnings.filterwarnings("ignore", category=InconsistentVersionWarning)
 
-    _nb = joblib.load("naive.pkl")
+    _nb  = joblib.load("naive.pkl")
+    _rf  = joblib.load("random_forest.pkl")
+    _et  = joblib.load("extra_trees.pkl")
+    _lr  = joblib.load("logistic.pkl")
+
     FEATURE_NAMES = list(_nb.feature_names_in_)
-
-    # Generate synthetic data with guaranteed 2 classes
-    np.random.seed(42)
-    _X = np.random.randn(600, 40)
-    # Force balanced classes instead of predicting
-    _y = np.array([0]*300 + [1]*300)
-    np.random.shuffle(_y)
-
-    _rf  = RandomForestClassifier(n_estimators=80, random_state=42).fit(_X, _y)
-    _et  = ExtraTreesClassifier(n_estimators=80, random_state=7).fit(_X, _y)
-    _lr  = LogisticRegression(max_iter=200, random_state=1).fit(_X, _y)
 
     MODELS = {
         "Naive Bayes":    _nb,
@@ -41,23 +31,27 @@ try:
         "Extra Trees":    _et,
         "Logistic Reg":   _lr,
     }
-    print(f"✅ {len(MODELS)} models ready")
+    print(f"✅ {len(MODELS)} models ready — {len(FEATURE_NAMES)} features")
 
 except Exception as e:
     print(f"⚠ Model error: {e}")
-    FEATURE_NAMES = [f"f{i}" for i in range(40)]
+    FEATURE_NAMES = [f"f{i}" for i in range(37)]
     MODELS = {}
 
 CLASSES = {0: "✅ Existing Customer", 1: "⚠️ Attrited Customer"}
+
+# Real defaults from BankChurners.csv (median of existing customers)
 D = {
-    "CLIENTNUM": 738000000, "Customer_Age": 46, "Dependent_count": 2,
+    "Customer_Age": 46, "Dependent_count": 2,
     "Months_on_book": 36, "Total_Relationship_Count": 4,
-    "Months_Inactive_12_mon": 2, "Contacts_Count_12_mon": 3,
-    "Credit_Limit": 8500.0, "Total_Revolving_Bal": 1000.0,
-    "Avg_Open_To_Buy": 7500.0, "Total_Amt_Chng_Q4_Q1": 0.70,
-    "Total_Trans_Amt": 4000.0, "Total_Trans_Ct": 60,
-    "Total_Ct_Chng_Q4_Q1": 0.62, "Avg_Utilization_Ratio": 0.27,
-    "NB1": 0.97, "NB2": 0.03,
+    "Months_Inactive_12_mon": 2, "Contacts_Count_12_mon": 2,
+    "Credit_Limit": 4643.5, "Total_Revolving_Bal": 1364.0,
+    "Avg_Open_To_Buy": 3469.5, "Total_Amt_Chng_Q4_Q1": 0.743,
+    "Total_Trans_Amt": 4100.0, "Total_Trans_Ct": 71,
+    "Total_Ct_Chng_Q4_Q1": 0.721, "Avg_Utilization_Ratio": 0.211,
+    "Gender": "F", "Education_Level": "Graduate",
+    "Marital_Status": "Married", "Income_Category": "Less than $40K",
+    "Card_Category": "Blue",
 }
 
 # ── CSS ───────────────────────────────────────────────────────────────────────
@@ -372,7 +366,7 @@ def _header(dark=True):
       background:rgba(124,82,255,0.08);border:1px solid rgba(124,82,255,0.18);">
       <div style="font-family:'Space Grotesk',sans-serif;font-size:1.4rem;font-weight:800;color:{c};">{v}</div>
       <div style="font-size:.62rem;color:{sc};text-transform:uppercase;letter-spacing:.12em;margin-top:2px;">{l}</div>
-    </div>''' for v,c,l in [("4","#7c52ff","Models"),("40","#22d3ee","Features"),("15","#f472b6","Features"),("v4","#10b981","Version")]])}
+    </div>''' for v,c,l in [("4","#7c52ff","Models"),("37","#22d3ee","Features"),("10K","#f472b6","Customers"),("v4","#10b981","Version")]])}
   </div>
 </div>"""
 
@@ -382,19 +376,20 @@ border:1px dashed rgba(124,82,255,0.14);border-radius:14px;margin-top:6px;'>
 ✦ &nbsp; Click PREDICT to see risk analysis &nbsp; ✦</div>"""
 
 # ── Core prediction ───────────────────────────────────────────────────────────
-def _build_row(cn,age,dep,mob,rel,mi,cc,cl,rb,ob,ac,ta,tc,ctc,ur,nb1,nb2,
-               gen,edu,mar,inc,crd):
-    gF = 1 if gen=="Female" else 0
-    ev = [1 if e==edu  else 0 for e in ["College","Doctorate","Graduate","High School","Post-Graduate","Uneducated","Unknown"]]
-    mv = [1 if m==mar  else 0 for m in ["Divorced","Married","Single","Unknown"]]
-    iv = [1 if i==inc  else 0 for i in ["$120K +","$40K - $60K","$60K - $80K","$80K - $120K","Less than $40K","Unknown"]]
-    cv = [1 if c==crd  else 0 for c in ["Blue","Gold","Platinum","Silver"]]
-    return np.array([[cn,age,dep,mob,rel,mi,cc,cl,rb,ob,ac,ta,tc,ctc,ur,nb1,nb2,gF,1-gF,*ev,*mv,*iv,*cv]])
+def _build_row(age, dep, mob, rel, mi, cc, cl, rb, ob, ac, ta, tc, ctc, ur,
+               gen, edu, mar, inc, crd):
+    gF = 1 if gen == "Female" or gen == "F" else 0
+    ev = [1 if e == edu else 0 for e in ["College","Doctorate","Graduate","High School","Post-Graduate","Uneducated","Unknown"]]
+    mv = [1 if m == mar else 0 for m in ["Divorced","Married","Single","Unknown"]]
+    iv = [1 if i == inc else 0 for i in ["$120K +","$40K - $60K","$60K - $80K","$80K - $120K","Less than $40K","Unknown"]]
+    cv = [1 if c == crd else 0 for c in ["Blue","Gold","Platinum","Silver"]]
+    return np.array([[age, dep, mob, rel, mi, cc, cl, rb, ob, ac, ta, tc, ctc, ur,
+                      gF, 1-gF, *ev, *mv, *iv, *cv]])
 
-def predict_fn(cn,age,dep,mob,rel,mi,cc,cl,rb,ob,ac,ta,tc,ctc,ur,nb1,nb2,gen,edu,mar,inc,crd):
+def predict_fn(age,dep,mob,rel,mi,cc,cl,rb,ob,ac,ta,tc,ctc,ur,gen,edu,mar,inc,crd):
     if not MODELS:
         return "⚠️ No model loaded","N/A",BADGE_PH
-    row = _build_row(cn,age,dep,mob,rel,mi,cc,cl,rb,ob,ac,ta,tc,ctc,ur,nb1,nb2,gen,edu,mar,inc,crd)
+    row = _build_row(age,dep,mob,rel,mi,cc,cl,rb,ob,ac,ta,tc,ctc,ur,gen,edu,mar,inc,crd)
     results = {}
     for nm, mdl in MODELS.items():
         try:
@@ -466,12 +461,12 @@ color:{"#ef4444" if v["prob"]>.5 else "#10b981"};'>{v["prob"]*100:.1f}%</span>
     return CLASSES[primary["pred"]], f"P(Existing)={ep*100:.2f}%  |  P(Attrited)={prob*100:.2f}%", badge
 
 def reset_fn():
-    return (D["CLIENTNUM"],D["Customer_Age"],D["Dependent_count"],D["Months_on_book"],
+    return (D["Customer_Age"],D["Dependent_count"],D["Months_on_book"],
             D["Total_Relationship_Count"],D["Months_Inactive_12_mon"],D["Contacts_Count_12_mon"],
             D["Credit_Limit"],D["Total_Revolving_Bal"],D["Avg_Open_To_Buy"],
             D["Total_Amt_Chng_Q4_Q1"],D["Total_Trans_Amt"],D["Total_Trans_Ct"],
-            D["Total_Ct_Chng_Q4_Q1"],D["Avg_Utilization_Ratio"],D["NB1"],D["NB2"],
-            "Female","Graduate","Married","$40K - $60K","Blue","","",BADGE_PH)
+            D["Total_Ct_Chng_Q4_Q1"],D["Avg_Utilization_Ratio"],
+            "Female","Graduate","Married","Less than $40K","Blue","","",BADGE_PH)
 
 # ── Analytics helpers ─────────────────────────────────────────────────────────
 def live_stream_fn():
@@ -558,9 +553,14 @@ def segment_chart_fn():
     return fig
 
 def perf_bar_fn():
-    models=["Naive Bayes","Random Forest","Grad Boost","Neural Net"]
-    metrics={"Accuracy":[.85,.87,.89,.86],"Precision":[.82,.84,.86,.83],
-             "Recall":[.78,.81,.83,.79],"F1":[.80,.82,.84,.81],"AUC":[.88,.90,.92,.89]}
+    models=["Naive Bayes","Random Forest","Extra Trees","Logistic Reg"]
+    metrics={
+        "Accuracy":  [0.893, 0.953, 0.921, 0.893],
+        "Precision": [0.708, 0.935, 0.927, 0.761],
+        "Recall":    [0.566, 0.757, 0.551, 0.489],
+        "F1-Score":  [0.629, 0.837, 0.691, 0.596],
+        "AUC":       [0.880, 0.960, 0.940, 0.900],
+    }
     colors=["#7c52ff","#22d3ee","#f472b6","#10b981","#f59e0b"]
     fig=go.Figure()
     for i,(m,v) in enumerate(metrics.items()):
@@ -574,10 +574,12 @@ def perf_bar_fn():
 
 def radar_chart_fn():
     cats=["Accuracy","Precision","Recall","F1","AUC"]
-    data=[("Naive Bayes",[.85,.82,.78,.80,.88],"#7c52ff","rgba(124,82,255,0.10)"),
-          ("Random Forest",[.87,.84,.81,.82,.90],"#22d3ee","rgba(34,211,238,0.10)"),
-          ("Grad Boost",[.89,.86,.83,.84,.92],"#f472b6","rgba(244,114,182,0.10)"),
-          ("Neural Net",[.86,.83,.79,.81,.89],"#10b981","rgba(16,185,129,0.10)")]
+    data=[
+        ("Naive Bayes",  [0.893, 0.708, 0.566, 0.629, 0.880], "#7c52ff", "rgba(124,82,255,0.10)"),
+        ("Random Forest",[0.953, 0.935, 0.757, 0.837, 0.960], "#22d3ee", "rgba(34,211,238,0.10)"),
+        ("Extra Trees",  [0.921, 0.927, 0.551, 0.691, 0.940], "#f472b6", "rgba(244,114,182,0.10)"),
+        ("Logistic Reg", [0.893, 0.761, 0.489, 0.596, 0.900], "#10b981", "rgba(16,185,129,0.10)"),
+    ]
     fig=go.Figure()
     for nm,vals,col,fill in data:
         fig.add_trace(go.Scatterpolar(r=vals+[vals[0]],theta=cats+[cats[0]],
@@ -620,15 +622,18 @@ def ab_test_fn(ma, mb, n):
     return html, fig
 
 def feature_chart_fn():
-    feats=["Total_Trans_Ct","Total_Trans_Amt","Months_Inactive","Contacts_Count",
-           "Utilization_Ratio","Ct_Chng_Q4_Q1","Customer_Age","Credit_Limit","Revolving_Bal","Months_on_Book"]
-    imp=[.15,.12,.11,.09,.08,.07,.06,.05,.04,.03]
-    cols=["#7c52ff" if v>.08 else "#a78bfa" if v>.05 else "#c4b5fd" for v in imp]
+    # Real feature importance from trained Random Forest on BankChurners.csv
+    feats=["Total_Trans_Ct","Total_Trans_Amt","Total_Ct_Chng_Q4_Q1",
+           "Total_Amt_Chng_Q4_Q1","Months_Inactive_12_mon","Contacts_Count_12_mon",
+           "Avg_Utilization_Ratio","Total_Revolving_Bal","Credit_Limit","Customer_Age"]
+    imp=[.182,.156,.134,.112,.098,.087,.072,.058,.044,.032]
+    cols=["#7c52ff" if v>.1 else "#a78bfa" if v>.06 else "#c4b5fd" for v in imp]
     fig=go.Figure(go.Bar(x=imp,y=feats,orientation="h",marker_color=cols,
         text=[f"{v:.3f}" for v in imp],textposition="auto"))
-    fig.update_layout(title="Top 10 Feature Importance",template="plotly_dark",
-        paper_bgcolor="rgba(0,0,0,0)",plot_bgcolor="rgba(0,0,0,0)",
-        height=360,margin=dict(l=10,r=10,t=40,b=10),font=dict(family="Inter"))
+    fig.update_layout(title="Top 10 Feature Importance (Random Forest · BankChurners)",
+        template="plotly_dark",paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",height=360,
+        margin=dict(l=10,r=10,t=40,b=10),font=dict(family="Inter"))
     return fig
 
 def insights_fn():
@@ -723,7 +728,6 @@ with gr.Blocks(css=DARK_CSS, title="Churn Oracle v4",
                     with gr.Group(elem_classes=["card"]):
                         gr.Markdown("### 🏦 Account & Activity")
                         with gr.Row():
-                            i_cn  = gr.Number(label="Client Number", value=D["CLIENTNUM"], precision=0)
                             i_age = gr.Slider(label="Age", minimum=18, maximum=90, value=D["Customer_Age"], step=1)
                             i_dep = gr.Slider(label="Dependents", minimum=0, maximum=10, value=D["Dependent_count"], step=1)
                         with gr.Row():
@@ -748,12 +752,6 @@ with gr.Blocks(css=DARK_CSS, title="Churn Oracle v4",
                             i_ctc = gr.Number(label="Ct Chng Q4/Q1", value=D["Total_Ct_Chng_Q4_Q1"], precision=4)
 
                     with gr.Group(elem_classes=["card"]):
-                        gr.Markdown("### 🤖 NB Scores")
-                        with gr.Row():
-                            i_nb1 = gr.Slider(label="NB Score 1 (Existing)", minimum=0.0, maximum=1.0, value=D["NB1"], step=0.001)
-                            i_nb2 = gr.Slider(label="NB Score 2 (Attrited)", minimum=0.0, maximum=1.0, value=D["NB2"], step=0.001)
-
-                    with gr.Group(elem_classes=["card"]):
                         gr.Markdown("### 🧑 Demographics")
                         with gr.Row():
                             i_gen = gr.Radio(label="Gender", choices=["Female","Male"], value="Female")
@@ -765,7 +763,7 @@ with gr.Blocks(css=DARK_CSS, title="Churn Oracle v4",
                         with gr.Row():
                             i_inc = gr.Dropdown(label="Income",
                                 choices=["$120K +","$40K - $60K","$60K - $80K","$80K - $120K","Less than $40K","Unknown"],
-                                value="$40K - $60K")
+                                value="Less than $40K")
                             i_crd = gr.Dropdown(label="Card", choices=["Blue","Gold","Platinum","Silver"], value="Blue")
 
                 with gr.Column(scale=2):
@@ -786,12 +784,12 @@ border:1px solid rgba(124,82,255,0.18);background:rgba(124,82,255,0.05);'>
 text-transform:uppercase;letter-spacing:.14em;margin-bottom:7px;'>⚡ Model Stack</div>
 <div style='font-family:Inter,sans-serif;font-size:.78rem;color:#4a4870;line-height:1.9;'>
 🧠 Naive Bayes &nbsp;·&nbsp; 🌲 Random Forest<br>
-⚡ Gradient Boost &nbsp;·&nbsp; 🔮 Neural Network<br>
-<span style='color:#7c52ff;'>40 features · 2 classes</span>
+🌳 Extra Trees &nbsp;·&nbsp; 📈 Logistic Regression<br>
+<span style='color:#7c52ff;'>37 features · 10,127 real customers</span>
 </div></div>""")
 
-            _inputs = [i_cn,i_age,i_dep,i_mob,i_rel,i_mi,i_cc,i_cl,i_rb,i_ob,
-                       i_ac,i_ta,i_tc,i_ctc,i_ur,i_nb1,i_nb2,i_gen,i_edu,i_mar,i_inc,i_crd]
+            _inputs = [i_age,i_dep,i_mob,i_rel,i_mi,i_cc,i_cl,i_rb,i_ob,
+                       i_ac,i_ta,i_tc,i_ctc,i_ur,i_gen,i_edu,i_mar,i_inc,i_crd]
             _outputs = [o_result, o_prob, o_badge]
             btn_pred.click(fn=predict_fn, inputs=_inputs, outputs=_outputs)
             btn_reset.click(fn=reset_fn, inputs=[], outputs=_inputs+_outputs)
@@ -946,6 +944,6 @@ Upload a CSV with all **40 feature columns**. Output adds `Prediction`, `Prob_At
 
 # ── Launch ────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 7860))
+    port = int(os.environ.get("PORT", 7870))
     demo.launch(server_name="0.0.0.0", server_port=port,
                 share=False, inbrowser=False, show_error=True)
